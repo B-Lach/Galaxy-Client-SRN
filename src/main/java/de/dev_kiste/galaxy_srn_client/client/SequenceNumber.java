@@ -36,7 +36,7 @@ public class SequenceNumber {
      *
      * @return new sequence number
      */
-    public long next() {
+    public synchronized long next() {
         if(value == MAX_VALUE) {
             value = MIN_VALUE;
         } else {
@@ -50,7 +50,7 @@ public class SequenceNumber {
      *
      * @return current value
      */
-    public long get() {
+    public synchronized long get() {
         return value;
     }
 
