@@ -54,6 +54,13 @@ public class SequenceNumber {
         return value;
     }
 
+    public synchronized long getAndUpdate() {
+        long current = value;
+        next();
+
+        return current;
+    }
+
     /**
      * Generates a random number between 0x00000000L - 0xFFFFFFFFL
      *
