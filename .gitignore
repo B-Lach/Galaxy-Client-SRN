@@ -64,3 +64,4 @@ buildNumber.properties
 ### MISC ###
 
 .DS_Store
+temp/
