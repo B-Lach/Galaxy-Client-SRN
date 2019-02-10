@@ -73,7 +73,7 @@ public class MessageHelper {
 
         byte[][] result = new byte[messageCount][];
         for(int i = 0; i < messageCount; i++) {
-            byte[] seqBytes = buildSequenceBytes(seqNumber.geAndUpdate());
+            byte[] seqBytes = buildSequenceBytes(seqNumber.getAndUpdate());
             byte[] refBytes = buildSequenceBytes(refSeqNumber.orElse(0L));
             byte[] flags = {buildFlagByte(refSeqNumber.isPresent(), i+1 == messageCount)};
 
