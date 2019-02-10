@@ -3,12 +3,14 @@ package de.dev_kiste.galaxy_srn_client;
 import de.dev_kiste.galaxy.driver.GalaxyDriver;
 import de.dev_kiste.galaxy.driver.HTWLoRaDriver;
 import de.dev_kiste.galaxy.messaging.GalaxyMessage;
-import de.dev_kiste.galaxy.node.GalaxyNode;
-import de.dev_kiste.galaxy.node.GalaxyNodeBuilder;
 import de.dev_kiste.galaxy.node.middleware.GalaxyMiddleware;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareCaller;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareStopper;
+import de.dev_kiste.galaxy_srn_client.client.DeviceType;
+import de.dev_kiste.galaxy_srn_client.client.SRNDevice;
+import de.dev_kiste.galaxy_srn_client.client.SRNDeviceBuilder;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -39,27 +41,31 @@ public class App {
             }
         };
 
-        GalaxyNode node = new GalaxyNodeBuilder()
+        SRNDevice device = new SRNDeviceBuilder()
+                .setDeviceType(DeviceType.FULL_FUNCTION)
                 .setDriver(driver)
-                .setMessageHandler(message -> System.out.println("Received payload: " + message.getPayload() + " from: " + message.getSource()))
+                .setSecret("FooBar")
                 .use(logger)
-//                .use(cancel)
                 .isDebug()
                 .build();
 
-        node.bootstrap()
-                .thenCompose(bootstrapped -> {
-                    System.out.println("Did bootstrapped: " + bootstrapped);
-
-                    return node.getAddress();
+        device.connect()
+                .thenCompose((isOnline) -> {
+                    if(isOnline) return device.setAddress("FFFF");
+                    System.out.println("device is not online");
+                    return CompletableFuture.completedFuture(false);
                 })
-                .thenCompose(address -> {
-                    System.out.println("Node address: " + address);
+                .thenCompose((didSetAddress) -> {
+                    if(didSetAddress) return device.getAddress();
+                    System.out.println("Did not set new address");
 
-                    return node.sendBroadcastMessage("Hello from macOS");
+                    return CompletableFuture.completedFuture("");
                 })
-                .thenAccept(didSend ->
-                        System.out.println("Did send message: " + didSend)
-                );
+                .thenCompose((address) -> {
+                    return device.send("Hello World");
+                })
+                .thenAccept((didSend) -> System.out.println("Did send: " + didSend));
+
+
     }
 }

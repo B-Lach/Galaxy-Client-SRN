@@ -128,8 +128,7 @@ public class SRNDevice {
         } else if(payloads.length >= index) {
             future.complete(lastSucceeded);
         } else {
-            // FIXME: Send payload instead of string
-            node.sendBroadcastMessage("")
+            node.sendBroadcastPayload(payloads[index])
                     .thenAccept((didSend) -> {
                         sendPayloadArray(payloads, index + 1, future, didSend);
                     });
