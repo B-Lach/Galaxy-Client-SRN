@@ -1,10 +1,5 @@
 package de.dev_kiste.galaxy_srn_client.client;
 
-import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KeysetHandle;
-import com.google.crypto.tink.aead.AeadConfig;
-import com.google.crypto.tink.aead.AeadFactory;
-import com.google.crypto.tink.aead.AeadKeyTemplates;
 import de.dev_kiste.galaxy.messaging.MessageHandler;
 import de.dev_kiste.galaxy.node.GalaxyNode;
 import de.dev_kiste.galaxy.node.GalaxyNodeBuilder;
@@ -24,25 +19,19 @@ public class SRNDevice {
 
     private DeviceType deviceType;
     private GalaxyNode node;
-    private SequenceNumber seqNumber;
+    private MessageHelper messageHelper;
 
     private final Optional<Logger> logger;
     private Optional<MessageHandler> messageHandler;
-
-    private Optional<Aead> aead = Optional.empty();
-    private final String secret;
-
+    
     SRNDevice(SRNDeviceBuilder builder) {
         messageHandler = Optional.ofNullable(builder.getMessageHandler());
         deviceType = builder.getDeviceType();
-        seqNumber = new SequenceNumber();
-        secret = builder.getSecret();
         logger = Optional.ofNullable(
                 builder.getIsDebug() ?
                         Logger.getLogger("Galaxy.GalaxyNode") :
                         null
         );
-
 
         GalaxyNodeBuilder nodeBuilder = new GalaxyNodeBuilder()
                 .setDriver(builder.getDriver())
@@ -57,12 +46,14 @@ public class SRNDevice {
         }
         node = nodeBuilder.build();
 
+        messageHelper = new MessageHelper(builder.getSecret(), node.getMaximumMessageSize());
+
         logIfNeeded(Level.INFO, "SRN Device initialized\n " +
                 "Device Type: " + deviceType + "\n" +
-                "Node: " + node + "\n" +
-                "Initial Sequence Number: " + seqNumber.get()
+                "Node: " + node + "\n"
         );
     }
+
     /**
      * Try to connect to module and start listening
      *
@@ -100,35 +91,49 @@ public class SRNDevice {
      */
     public CompletableFuture<Boolean> findCoordinator(int repeatCount ) {
         CompletableFuture<Boolean> future = new CompletableFuture();
-
         // TODO: Start Broadcasting Coordinator Search, store future and return if response received or repeatCount exceeded
         return future;
     }
 
-    private boolean setupCrypto() {
-        // https://github.com/google/tink/blob/master/docs/JAVA-HOWTO.md
+    /**
+     * Method to send the given message using FFFF (broadcast) as destination.
+     *
+     * @param message Message to send
+     * @return Futurue containing boolean indicating if sending the message succeeded.
+     */
+    public CompletableFuture<Boolean> send(String message) {
+        CompletableFuture<Boolean> future = new CompletableFuture();
         try {
-            AeadConfig.register();
-            // 1. Generate the key material.
-            KeysetHandle keysetHandle = KeysetHandle.generateNew(AeadKeyTemplates.AES128_GCM);
-            // 2. Get the primitive.
-            aead = Optional.of(AeadFactory.getPrimitive(keysetHandle));
+            byte[][] payloads = messageHelper.buildMessage(Optional.empty(), message);
+            sendPayloadArray(payloads, 0, future, true);
 
-            return true;
         } catch (Exception e) {
             logIfNeeded(Level.WARNING, e.getMessage());
-            return false;
+            future.complete(false);
         }
+        return future;
     }
 
-    private byte[][] buildMessage(long refSeqNumber, String payload) {
-        //TODO: Implement logic
-        return null;
-    }
-
-    private String encryptPayload(String source) {
-        // TODO: Implement logic
-        return null;
+    /**
+     * Recursively sends an array of payloads and will trigger the future after each message was send
+     *
+     * @param payloads The payloads to send
+     * @param index The current in the payload array. Should be set to 0 on calling this methodö
+     * @param future The Future to trigger at the end.
+     * @param lastSucceeded Boolean indicating if the last message was send. Should be set to true on calling this method
+     */
+    private void sendPayloadArray(byte[][] payloads, int index, CompletableFuture<Boolean> future, boolean lastSucceeded) {
+        if(!lastSucceeded) {
+            future.complete(lastSucceeded);
+        } else if(payloads.length >= index) {
+            future.complete(lastSucceeded);
+        } else {
+            // FIXME: Send payload instead of string
+            node.sendBroadcastMessage("")
+                    .thenAccept((didSend) -> {
+                        sendPayloadArray(payloads, index + 1, future, didSend);
+                    });
+        }
     }
 
     /**
