@@ -125,7 +125,7 @@ public class SRNDevice {
     private void sendPayloadArray(byte[][] payloads, int index, CompletableFuture<Boolean> future, boolean lastSucceeded) {
         if(!lastSucceeded) {
             future.complete(lastSucceeded);
-        } else if(payloads.length >= index) {
+        } else if(index >= payloads.length) {
             future.complete(lastSucceeded);
         } else {
             node.sendBroadcastPayload(payloads[index])
