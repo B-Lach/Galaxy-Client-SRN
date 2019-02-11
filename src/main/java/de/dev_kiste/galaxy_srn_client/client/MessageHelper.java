@@ -69,7 +69,7 @@ public class MessageHelper {
 
         byte[] encrypted = encrypt(payload.getBytes());
         int payloadSize = encrypted.length;
-        int messageCount= payloadSize / getMaxPayloadSize();
+        int messageCount = (int) Math.ceil((double) payloadSize / getMaxPayloadSize());
 
         byte[][] result = new byte[messageCount][];
         for(int i = 0; i < messageCount; i++) {
