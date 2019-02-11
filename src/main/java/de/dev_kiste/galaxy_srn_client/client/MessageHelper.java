@@ -1,12 +1,12 @@
 package de.dev_kiste.galaxy_srn_client.client;
 
-import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KeysetHandle;
-import com.google.crypto.tink.aead.AeadConfig;
-import com.google.crypto.tink.aead.AeadFactory;
-import com.google.crypto.tink.aead.AeadKeyTemplates;
+import sun.misc.BASE64Decoder;
+import sun.misc.BASE64Encoder;
 
-import java.security.GeneralSecurityException;
+import javax.crypto.Cipher;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -17,8 +17,7 @@ import java.util.Optional;
  */
 public class MessageHelper {
     private SequenceNumber seqNumber;
-    private Aead aead = null;
-
+    private SecretKeySpec keySpec;
     private String secret;
     private int maxPayload;
 
@@ -41,14 +40,17 @@ public class MessageHelper {
     }
 
     private boolean setupCrypto() {
-        // https://github.com/google/tink/blob/master/docs/JAVA-HOWTO.md
         try {
-            AeadConfig.register();
-            // 1. Generate the key material.
-            KeysetHandle keysetHandle = KeysetHandle.generateNew(AeadKeyTemplates.AES128_GCM);
-            // 2. Get the primitive.
-            aead = AeadFactory.getPrimitive(keysetHandle);
-
+            // https://blog.axxg.de/java-aes-verschluesselung-mit-beispiel/
+            // byte-Array erzeugen
+            byte[] key = secret.getBytes(StandardCharsets.UTF_8);
+            // aus dem Array einen Hash-Wert erzeugen mit MD5 oder SHA
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            key = sha.digest(key);
+            // nur die ersten 128 bit nutzen
+            key = Arrays.copyOf(key, 16);
+            // der fertige Schluessel
+            keySpec = new SecretKeySpec(key, "AES");
             return true;
         } catch (Exception e) {
             System.out.println(e);
@@ -63,9 +65,9 @@ public class MessageHelper {
      * @param refSeqNumber Optional containing a reference sequence number if needed
      * @param payload the payload to send
      * @return generated array of payloads
-     * @throws GeneralSecurityException if something went wrong encrypting the payload
+     * @throws Exception if something went wrong encrypting the payload
      */
-    public byte[][] buildMessage(Optional<Long> refSeqNumber, String payload) throws GeneralSecurityException {
+    public byte[][] buildMessage(Optional<Long> refSeqNumber, String payload) throws Exception {
 
         byte[] encrypted = encrypt(payload.getBytes());
         int payloadSize = encrypted.length;
@@ -86,24 +88,37 @@ public class MessageHelper {
     }
 
     /**
-     * Decrypts the given input and returns the plain payload
+     * Decrypts the given input - must be base64 encoded - usind AES and returns the plain payload
+     *
      * @param input The input to decrypt
      * @return Decrypted input
-     * @throws GeneralSecurityException if somehting went wrong decrypting the input
+     * @throws Exception if something went wrong decrypting the input
      */
-    public byte[] decrypt(byte[] input) throws GeneralSecurityException {
-        return aead.decrypt(input, secret.getBytes());
+    public byte[] decrypt(byte[] input) throws Exception {
+        BASE64Decoder decoder = new BASE64Decoder();
+        byte[] decoded = decoder.decodeBuffer(new String(input, StandardCharsets.UTF_8));
+
+        Cipher cipher = Cipher.getInstance("AES");
+        cipher.init(Cipher.DECRYPT_MODE, keySpec);
+
+        return cipher.doFinal(decoded);
     }
 
     /**
-     * Encrypts the given input
+     * Encrypts the given input using AES
      *
      * @param input
-     * @return encrypted input
-     * @throws GeneralSecurityException
+     * @return encrypted input as base64
+     * @throws Exception if something went wrong encrypting the input
      */
-    private byte[] encrypt(byte[] input) throws GeneralSecurityException {
-        return aead.encrypt(input, secret.getBytes());
+    private byte[] encrypt(byte[] input) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES");
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec);
+        byte[] encrypted = cipher.doFinal(input);
+
+        BASE64Encoder encoder = new BASE64Encoder();
+
+        return encoder.encode(encrypted).getBytes(StandardCharsets.UTF_8);
     }
 
     /**
@@ -146,7 +161,7 @@ public class MessageHelper {
      * @param arrays arrays to concatenate
      * @return Concatenated array
      */
-    private  byte[] concatenateBytes(byte[]... arrays) {
+    private byte[] concatenateBytes(byte[]... arrays) {
         // https://www.mkyong.com/java/java-how-to-join-arrays/
         int length = 0;
         for (byte[] array : arrays) {
