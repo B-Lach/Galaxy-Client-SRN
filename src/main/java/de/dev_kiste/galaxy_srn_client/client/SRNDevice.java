@@ -1,10 +1,14 @@
 package de.dev_kiste.galaxy_srn_client.client;
 
+import de.dev_kiste.galaxy.messaging.GalaxyMessage;
 import de.dev_kiste.galaxy.messaging.MessageHandler;
 import de.dev_kiste.galaxy.node.GalaxyNode;
 import de.dev_kiste.galaxy.node.GalaxyNodeBuilder;
 import de.dev_kiste.galaxy.node.middleware.GalaxyMiddleware;
+import de.dev_kiste.galaxy.node.middleware.MiddlewareCaller;
+import de.dev_kiste.galaxy.node.middleware.MiddlewareStopper;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
@@ -41,6 +45,21 @@ public class SRNDevice {
         if(builder.getIsDebug()) {
             nodeBuilder = nodeBuilder.isDebug();
         }
+
+        nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
+            try {
+                byte[] decrypted = messageHelper.decrypt(message.getPayload().getBytes(StandardCharsets.UTF_8));
+
+                GalaxyMessage newMessage = new GalaxyMessage(new String(decrypted, StandardCharsets.UTF_8),message.getSource());
+                logIfNeeded(Level.INFO, "Incoming message has been decrypted");
+
+                caller.call(newMessage);
+            } catch (Exception e) {
+                logIfNeeded(Level.WARNING, e.getMessage());
+                stopper.stop();
+            }
+        });
+
         for(GalaxyMiddleware m: builder.getMiddlewares()) {
             nodeBuilder.use(m);
         }

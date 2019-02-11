@@ -61,9 +61,7 @@ public class App {
 
                     return CompletableFuture.completedFuture("");
                 })
-                .thenCompose((address) -> {
-                    return device.send("Hello World");
-                })
+                .thenCompose((address) -> device.send("Hello World"))
                 .thenAccept((didSend) -> System.out.println("Did send: " + didSend));
 
 
