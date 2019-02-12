@@ -137,10 +137,11 @@ public class SRNDevice {
         CompletableFuture<Boolean> future = new CompletableFuture();
         try {
             SRNMessage[] messages = messageHelper.buildMessage(Optional.empty(), message);
-            byte[][] payloads = (byte[][]) Arrays.asList(messages).stream()
-                    .map(obj -> obj.toBytes())
-                    .collect(Collectors.toList())
-                    .toArray();
+            byte[][] payloads = new byte[messages.length][];
+
+            for(int i = 0; i < messages.length; i++) {
+                payloads[i] = messages[i].toBytes();
+            }
             sendPayloadArray(payloads, 0, future, true);
 
         } catch (Exception e) {
