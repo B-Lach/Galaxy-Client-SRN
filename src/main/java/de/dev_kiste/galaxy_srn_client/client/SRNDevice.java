@@ -7,12 +7,15 @@ import de.dev_kiste.galaxy.node.GalaxyNodeBuilder;
 import de.dev_kiste.galaxy.node.middleware.GalaxyMiddleware;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareCaller;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareStopper;
+import de.dev_kiste.galaxy_srn_client.message.SRNMessage;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * SRNDevice class
@@ -48,12 +51,22 @@ public class SRNDevice {
 
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             try {
-                byte[] decrypted = messageHelper.decrypt(message.getPayload().getBytes(StandardCharsets.UTF_8));
+                byte[] bytes = message.getPayload().getBytes(StandardCharsets.UTF_8);
+                SRNMessage incoming = new SRNMessage(bytes);
 
-                GalaxyMessage newMessage = new GalaxyMessage(new String(decrypted, StandardCharsets.UTF_8),message.getSource());
+                // FIXME: decrypting doesn't work
+//                byte[] header = Arrays.copyOfRange(bytes, 0, messageHelper.getDataOffset());
+//                byte[] payload = Arrays.copyOfRange(bytes, messageHelper.getDataOffset(), bytes.length);
+//                byte[] decrypted = messageHelper.decrypt(payload);
+//                byte[] newBytes = new byte[header.length + decrypted.length];
+//
+//                System.arraycopy(header, 0, newBytes, 0, header.length);
+//                System.arraycopy(decrypted, 0, newBytes, header.length, decrypted.length);
+
+//                GalaxyMessage newMessage = new GalaxyMessage(new String(newBytes, StandardCharsets.UTF_8),message.getSource());
                 logIfNeeded(Level.INFO, "Incoming message has been decrypted");
 
-                caller.call(newMessage);
+                caller.call(message);
             } catch (Exception e) {
                 logIfNeeded(Level.WARNING, e.getMessage());
                 stopper.stop();
@@ -123,7 +136,11 @@ public class SRNDevice {
     public CompletableFuture<Boolean> send(String message) {
         CompletableFuture<Boolean> future = new CompletableFuture();
         try {
-            byte[][] payloads = messageHelper.buildMessage(Optional.empty(), message);
+            SRNMessage[] messages = messageHelper.buildMessage(Optional.empty(), message);
+            byte[][] payloads = (byte[][]) Arrays.asList(messages).stream()
+                    .map(obj -> obj.toBytes())
+                    .collect(Collectors.toList())
+                    .toArray();
             sendPayloadArray(payloads, 0, future, true);
 
         } catch (Exception e) {

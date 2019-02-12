@@ -1,5 +1,7 @@
 package de.dev_kiste.galaxy_srn_client.client;
 
+import de.dev_kiste.galaxy_srn_client.message.SRNMessage;
+import de.dev_kiste.galaxy_srn_client.message.SRNMessageHeader;
 import sun.misc.BASE64Decoder;
 import sun.misc.BASE64Encoder;
 
@@ -59,32 +61,41 @@ public class MessageHelper {
     }
 
     /**
-     * Method to build an array of messages from the given values. The payload will be encrypted automatically and
+     * Method to build an array of <code>SRNMessage</code> object from the given values. The payload will be encrypted automatically and
      * multiple messages will be generated if the payload does not fit in one single message.
      *
      * @param refSeqNumber Optional containing a reference sequence number if needed
      * @param payload the payload to send
-     * @return generated array of payloads
+     * @return generated payloads
      * @throws Exception if something went wrong encrypting the payload
      */
-    public byte[][] buildMessage(Optional<Long> refSeqNumber, String payload) throws Exception {
-
-        byte[] encrypted = encrypt(payload.getBytes());
-        int payloadSize = encrypted.length;
+    public SRNMessage[] buildMessage(Optional<Long> refSeqNumber, String payload) throws Exception {
+        // FIXME: Encrypted content can't be decrypted by receiver ...
+//        byte[] encrypted = encrypt(payload.getBytes());
+//        int payloadSize = encrypted.length;
+        int payloadSize = payload.getBytes(StandardCharsets.UTF_8).length;
         int messageCount = (int) Math.ceil((double) payloadSize / getMaxPayloadSize());
 
-        byte[][] result = new byte[messageCount][];
+        SRNMessage[] result = new SRNMessage[messageCount];
         for(int i = 0; i < messageCount; i++) {
             byte[] seqBytes = buildSequenceBytes(seqNumber.getAndUpdate());
             byte[] refBytes = buildSequenceBytes(refSeqNumber.orElse(0L));
-            byte[] flags = {buildFlagByte(refSeqNumber.isPresent(), i+1 == messageCount)};
 
-            int index = (i+1 == messageCount && messageCount > 1) ? encrypted.length - 1 : getMaxPayloadSize() * (i+1) - 1;
-            byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, index);
-
-            result[i] = concatenateBytes(seqBytes, refBytes, flags, data);
+            int index = (i+1 == messageCount && messageCount > 1) ? payloadSize - 1 : getMaxPayloadSize() * (i+1) - 1;
+            //byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, index);
+            result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), i+1 == messageCount, payload);
         }
+        SRNMessage t = new SRNMessage(result[0].toBytes());
         return result;
+    }
+
+    /**
+     * Builds an <code>SRNMessage</code> object from the given data
+     * @param data the reference data
+     * @return Generated message
+     */
+    public SRNMessage getMessageFromBytes(byte[] data) {
+        return new SRNMessage(data);
     }
 
     /**
@@ -104,6 +115,9 @@ public class MessageHelper {
         return cipher.doFinal(decoded);
     }
 
+    public int getDataOffset() {
+        return SRNMessageHeader.headerSize();
+    }
     /**
      * Encrypts the given input using AES
      *
@@ -138,24 +152,6 @@ public class MessageHelper {
     }
 
     /**
-     * Builds the flag byte for the given input
-     *
-     * @param hasRef boolean indicating if a reference sequence number is available
-     * @param isFin boolean indicating if the message, the flag byte belongs to, is the last one
-     * @return Calculated flag array
-     */
-    private byte buildFlagByte(boolean hasRef, boolean isFin) {
-        // fin: 1000 0000
-        // ref: 0100 0000
-        int n = 0;
-        if (isFin) n += 128;
-        if (hasRef) n += 64;
-
-        return (byte) n;
-
-    }
-
-    /**
      * Concatenates the given byte arrays and returns the new array
      *
      * @param arrays arrays to concatenate
@@ -179,11 +175,6 @@ public class MessageHelper {
     }
 
     private int getMaxPayloadSize() {
-        // 32 Bit Sequence number
-        // 32 Bit Reference Sequence number (0x0) if no ref was defined
-        // 1 Bit for Reference Flag
-        // 1 Bit for Fin Flag
-        // 6 Bit reserved and unused -
-        return maxPayload - 9;
+        return maxPayload - getDataOffset();
     }
 }
