@@ -21,7 +21,7 @@
                             <goal>wget</goal>
                         </goals>
                         <configuration>
-                            <url>https://github.com/B-Lach/Galaxy/releases/download/v1.1/galaxy-1.1.jar</url>
+                            <url>https://github.com/B-Lach/Galaxy/releases/download/v1.2/galaxy-1.2.jar</url>
                             <unpack>false</unpack>
                             <outputDirectory>${basedir}/temp/</outputDirectory>
                         </configuration>
