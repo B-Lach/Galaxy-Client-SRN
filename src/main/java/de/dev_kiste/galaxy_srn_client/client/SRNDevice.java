@@ -51,7 +51,7 @@ public class SRNDevice {
 
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             try {
-                byte[] bytes = message.getPayload().getBytes(StandardCharsets.UTF_8);
+                byte[] bytes = message.getPayload();
                 SRNMessage incoming = new SRNMessage(bytes);
 
                 // FIXME: decrypting doesn't work
