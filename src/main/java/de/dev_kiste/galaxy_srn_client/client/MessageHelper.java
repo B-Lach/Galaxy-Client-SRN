@@ -2,14 +2,13 @@ package de.dev_kiste.galaxy_srn_client.client;
 
 import de.dev_kiste.galaxy_srn_client.message.SRNMessage;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessageHeader;
-import sun.misc.BASE64Decoder;
-import sun.misc.BASE64Encoder;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Optional;
 
 /**
@@ -71,9 +70,9 @@ public class MessageHelper {
      */
     public SRNMessage[] buildMessage(Optional<Long> refSeqNumber, String payload) throws Exception {
         // FIXME: Encrypted content can't be decrypted by receiver ...
-//        byte[] encrypted = encrypt(payload.getBytes());
-//        int payloadSize = encrypted.length;
-        int payloadSize = payload.getBytes(StandardCharsets.UTF_8).length;
+        byte[] encrypted = encrypt(payload.getBytes());
+        int payloadSize = encrypted.length;
+//        int payloadSize = payload.getBytes(StandardCharsets.UTF_8).length;
         int messageCount = (int) Math.ceil((double) payloadSize / getMaxPayloadSize());
 
         SRNMessage[] result = new SRNMessage[messageCount];
@@ -81,16 +80,16 @@ public class MessageHelper {
             byte[] seqBytes = buildSequenceBytes(seqNumber.getAndUpdate());
             byte[] refBytes = buildSequenceBytes(refSeqNumber.orElse(0L));
 
-            int index = (i+1 == messageCount && messageCount > 1) ? payloadSize - 1 : getMaxPayloadSize() * (i+1) - 1;
-            //byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, index);
-            result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), i+1 == messageCount, payload);
+            int index = (i+1 == messageCount) ? payloadSize : getMaxPayloadSize() * (i+1);
+            byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, index);
+            result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), i+1 == messageCount, new String(data, StandardCharsets.UTF_8));
         }
-        SRNMessage t = new SRNMessage(result[0].toBytes());
         return result;
     }
 
     /**
      * Builds an <code>SRNMessage</code> object from the given data
+     *
      * @param data the reference data
      * @return Generated message
      */
@@ -106,8 +105,7 @@ public class MessageHelper {
      * @throws Exception if something went wrong decrypting the input
      */
     public byte[] decrypt(byte[] input) throws Exception {
-        BASE64Decoder decoder = new BASE64Decoder();
-        byte[] decoded = decoder.decodeBuffer(new String(input, StandardCharsets.UTF_8));
+        byte[] decoded = Base64.getDecoder().decode(input);
 
         Cipher cipher = Cipher.getInstance("AES");
         cipher.init(Cipher.DECRYPT_MODE, keySpec);
@@ -130,9 +128,7 @@ public class MessageHelper {
         cipher.init(Cipher.ENCRYPT_MODE, keySpec);
         byte[] encrypted = cipher.doFinal(input);
 
-        BASE64Encoder encoder = new BASE64Encoder();
-
-        return encoder.encode(encrypted).getBytes(StandardCharsets.UTF_8);
+        return Base64.getEncoder().encode(encrypted);
     }
 
     /**

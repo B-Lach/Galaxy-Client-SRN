@@ -21,7 +21,7 @@
                             <goal>wget</goal>
                         </goals>
                         <configuration>
-                            <url>https://github.com/B-Lach/Galaxy/releases/download/v1.2/galaxy-1.2.jar</url>
+                            <url>https://github.com/B-Lach/Galaxy/releases/download/v1.2.1/galaxy-1.2.1.jar</url>
                             <unpack>false</unpack>
                             <outputDirectory>${basedir}/temp/</outputDirectory>
                         </configuration>
@@ -41,9 +41,9 @@
                         <configuration>
                             <groupId>de.dev_kiste</groupId>
                             <artifactId>galaxy</artifactId>
-                            <version>1.2</version>
+                            <version>1.2.1</version>
                             <packaging>jar</packaging>
-                            <file>${basedir}/temp/galaxy-1.2.jar</file>
+                            <file>${basedir}/temp/galaxy-1.2.1.jar</file>
                             <generatePom>true</generatePom>
                         </configuration>
                     </execution>
@@ -105,7 +105,7 @@
         <dependency>
             <groupId>de.dev_kiste</groupId>
             <artifactId>galaxy</artifactId>
-            <version>1.2</version>
+            <version>1.2.1</version>
         </dependency>
     </dependencies>
 </project>

@@ -8,14 +8,13 @@ import de.dev_kiste.galaxy.node.middleware.GalaxyMiddleware;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareCaller;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareStopper;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessage;
+import de.dev_kiste.galaxy_srn_client.message.SRNMessageHeader;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 /**
  * SRNDevice class
@@ -43,30 +42,31 @@ public class SRNDevice {
         GalaxyNodeBuilder nodeBuilder = new GalaxyNodeBuilder()
                 .setDriver(builder.getDriver())
                 // TODO: Replace with valid logic
-                .setMessageHandler((message) -> System.out.println("received: " + message.getPayload() + " : " + message.getSource()));
+                .setMessageHandler((message) -> System.out.println("received: " + new String(message.getPayload(), StandardCharsets.UTF_8) + " : " + message.getSource()));
 
         if(builder.getIsDebug()) {
             nodeBuilder = nodeBuilder.isDebug();
         }
 
+        // Decrypt incoming message first
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             try {
-                byte[] bytes = message.getPayload();
-                SRNMessage incoming = new SRNMessage(bytes);
+                int offset = SRNMessageHeader.headerSize();
+                int length = message.getPayload().length - offset;
 
-                // FIXME: decrypting doesn't work
-//                byte[] header = Arrays.copyOfRange(bytes, 0, messageHelper.getDataOffset());
-//                byte[] payload = Arrays.copyOfRange(bytes, messageHelper.getDataOffset(), bytes.length);
-//                byte[] decrypted = messageHelper.decrypt(payload);
-//                byte[] newBytes = new byte[header.length + decrypted.length];
-//
-//                System.arraycopy(header, 0, newBytes, 0, header.length);
-//                System.arraycopy(decrypted, 0, newBytes, header.length, decrypted.length);
+                byte[] encrypted = new byte[length];
+                System.arraycopy(message.getPayload(), offset, encrypted, 0, length);
 
-//                GalaxyMessage newMessage = new GalaxyMessage(new String(newBytes, StandardCharsets.UTF_8),message.getSource());
+                byte[] decrypted = messageHelper.decrypt(encrypted);
+                byte[] newBytes = new byte[offset + decrypted.length];
+
+                System.arraycopy(message.getPayload(), 0, newBytes, 0, offset);
+                System.arraycopy(decrypted, 0, newBytes, offset, decrypted.length);
+
+                GalaxyMessage newMessage = new GalaxyMessage(newBytes,message.getSource());
                 logIfNeeded(Level.INFO, "Incoming message has been decrypted");
 
-                caller.call(message);
+                caller.call(newMessage);
             } catch (Exception e) {
                 logIfNeeded(Level.WARNING, e.getMessage());
                 stopper.stop();

@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class SRNMessage {
     private SRNMessageHeader header;
-    private String payload = "";
+    private String payload;
 
     public SRNMessage(byte[] seqNumber, byte[] refNumber, boolean hasRefNumber, boolean isLastMessage, String payload) {
         // TODO: Check for validity
@@ -44,5 +44,13 @@ public class SRNMessage {
         System.arraycopy(data, 0, result, headerBytes.length, data.length);
 
         return result;
+    }
+
+    public SRNMessageHeader getHeader() {
+        return header;
+    }
+
+    public String getPayload() {
+        return payload;
     }
 }
