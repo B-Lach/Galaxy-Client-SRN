@@ -1,6 +1,7 @@
 package de.dev_kiste.galaxy_srn_client.message;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 /**
  * Class that represents a Message in the network
@@ -60,5 +61,10 @@ public class SRNMessage {
 
     public byte getTopic() {
         return topic;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(payload);
     }
 }

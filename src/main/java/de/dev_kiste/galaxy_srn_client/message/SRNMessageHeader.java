@@ -28,6 +28,22 @@ public class SRNMessageHeader {
         setFlags(data[8]);
     }
 
+    public byte[] getSeqNumber() {
+        return seqNumber.clone();
+    }
+
+    public byte[] getRefNumber() {
+        return refNumber.clone();
+    }
+
+    public boolean hasRefNumber() {
+        return hasRefNumber;
+    }
+
+    public boolean isLastMessage() {
+        return isLastMessage;
+    }
+
     /**
      * Returns the size of the header in bytes
      *
@@ -76,6 +92,5 @@ public class SRNMessageHeader {
         if (hasRefNumber) n += 64;
 
         return new byte[] {(byte) n};
-
     }
 }

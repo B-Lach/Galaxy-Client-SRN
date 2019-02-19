@@ -76,6 +76,18 @@ public class SRNDevice {
             }
         });
 
+        nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
+            SRNMessage m = new SRNMessage(message.getPayload());
+
+            if(LoopDetector.getInstance().haveMessageSeenBefore(m)) {
+                logIfNeeded(Level.INFO, "Loop detection found duplicate message. Will stop pipeline execution");
+                stopper.stop();
+            } else {
+                logIfNeeded(Level.INFO, "Loop detection hasn't found a duplicate.");
+                caller.call(message);
+            }
+        });
+
         for(GalaxyMiddleware m: builder.getMiddlewares()) {
             nodeBuilder.use(m);
         }
@@ -143,6 +155,7 @@ public class SRNDevice {
             byte[][] payloads = new byte[messages.length][];
 
             for(int i = 0; i < messages.length; i++) {
+                LoopDetector.getInstance().willSendMessage(messages[i]);
                 payloads[i] = messages[i].toBytes();
             }
             sendPayloadArray(payloads, 0, future, true);
@@ -158,7 +171,7 @@ public class SRNDevice {
      * Recursively sends an array of payloads and will trigger the future after each message was send
      *
      * @param payloads The payloads to send
-     * @param index The current in the payload array. Should be set to 0 on calling this methodö
+     * @param index The current in the payload array. Should be set to 0 on calling this method
      * @param future The Future to trigger at the end.
      * @param lastSucceeded Boolean indicating if the last message was send. Should be set to true on calling this method
      */
@@ -169,9 +182,7 @@ public class SRNDevice {
             future.complete(lastSucceeded);
         } else {
             node.sendBroadcastPayload(payloads[index])
-                    .thenAccept((didSend) -> {
-                        sendPayloadArray(payloads, index + 1, future, didSend);
-                    });
+                    .thenAccept(didSend -> sendPayloadArray(payloads, index + 1, future, didSend));
         }
     }
 
