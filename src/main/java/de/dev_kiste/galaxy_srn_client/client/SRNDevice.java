@@ -10,7 +10,6 @@ import de.dev_kiste.galaxy.node.middleware.MiddlewareStopper;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessage;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessageHeader;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
@@ -42,7 +41,11 @@ public class SRNDevice {
         GalaxyNodeBuilder nodeBuilder = new GalaxyNodeBuilder()
                 .setDriver(builder.getDriver())
                 // TODO: Replace with valid logic
-                .setMessageHandler((message) -> System.out.println("received: " + new String(message.getPayload(), StandardCharsets.UTF_8) + " : " + message.getSource()));
+                .setMessageHandler(received-> {
+                    SRNMessage message = new SRNMessage(received.getPayload());
+
+                    System.out.println(received.getSource() + " : " + message);
+                });
 
         if(builder.getIsDebug()) {
             nodeBuilder = nodeBuilder.isDebug();
@@ -51,7 +54,7 @@ public class SRNDevice {
         // Decrypt incoming message first
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             try {
-                int offset = SRNMessageHeader.headerSize();
+                int offset = SRNMessageHeader.headerSize() + 1;
                 int length = message.getPayload().length - offset;
 
                 byte[] encrypted = new byte[length];
@@ -63,7 +66,7 @@ public class SRNDevice {
                 System.arraycopy(message.getPayload(), 0, newBytes, 0, offset);
                 System.arraycopy(decrypted, 0, newBytes, offset, decrypted.length);
 
-                GalaxyMessage newMessage = new GalaxyMessage(newBytes,message.getSource());
+                GalaxyMessage newMessage = new GalaxyMessage(newBytes, message.getSource());
                 logIfNeeded(Level.INFO, "Incoming message has been decrypted");
 
                 caller.call(newMessage);
@@ -133,10 +136,10 @@ public class SRNDevice {
      * @param message Message to send
      * @return Futurue containing boolean indicating if sending the message succeeded.
      */
-    public CompletableFuture<Boolean> send(String message) {
+    public CompletableFuture<Boolean> send(byte topic, String message ) {
         CompletableFuture<Boolean> future = new CompletableFuture();
         try {
-            SRNMessage[] messages = messageHelper.buildMessage(Optional.empty(), message);
+            SRNMessage[] messages = messageHelper.buildMessage(Optional.empty(), topic, message);
             byte[][] payloads = new byte[messages.length][];
 
             for(int i = 0; i < messages.length; i++) {

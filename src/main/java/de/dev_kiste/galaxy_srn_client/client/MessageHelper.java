@@ -68,21 +68,22 @@ public class MessageHelper {
      * @return generated payloads
      * @throws Exception if something went wrong encrypting the payload
      */
-    public SRNMessage[] buildMessage(Optional<Long> refSeqNumber, String payload) throws Exception {
-        // FIXME: Encrypted content can't be decrypted by receiver ...
+    public SRNMessage[] buildMessage(Optional<Long> refSeqNumber, byte topic, String payload) throws Exception {
         byte[] encrypted = encrypt(payload.getBytes());
+
         int payloadSize = encrypted.length;
-//        int payloadSize = payload.getBytes(StandardCharsets.UTF_8).length;
         int messageCount = (int) Math.ceil((double) payloadSize / getMaxPayloadSize());
 
         SRNMessage[] result = new SRNMessage[messageCount];
+
         for(int i = 0; i < messageCount; i++) {
             byte[] seqBytes = buildSequenceBytes(seqNumber.getAndUpdate());
             byte[] refBytes = buildSequenceBytes(refSeqNumber.orElse(0L));
 
             int index = (i+1 == messageCount) ? payloadSize : getMaxPayloadSize() * (i+1);
             byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, index);
-            result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), i+1 == messageCount, new String(data, StandardCharsets.UTF_8));
+
+            result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), i+1 == messageCount, topic, new String(data, StandardCharsets.UTF_8));
         }
         return result;
     }
