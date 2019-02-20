@@ -10,14 +10,16 @@ public class SRNMessageHeader {
     private byte[] seqNumber;
     private byte[] refNumber;
     private boolean hasRefNumber;
+    private boolean isMultiMessage;
     private boolean isLastMessage;
 
-    SRNMessageHeader(byte[] seqNumber, byte[] refNumber, boolean hasRefNumber, boolean isLastMessage) {
+    SRNMessageHeader(byte[] seqNumber, byte[] refNumber, boolean hasRefNumber, boolean isMultiMessage, boolean isLastMessage) {
         // TODO: Check for validity
         this.seqNumber = seqNumber;
         this.refNumber = refNumber;
         this.hasRefNumber = hasRefNumber;
         this.isLastMessage = isLastMessage;
+        this.isMultiMessage = isMultiMessage;
     }
 
     SRNMessageHeader(byte[] data) {
@@ -44,6 +46,8 @@ public class SRNMessageHeader {
         return isLastMessage;
     }
 
+    public boolean isMultiMessage() { return isMultiMessage; }
+
     /**
      * Returns the size of the header in bytes
      *
@@ -53,8 +57,9 @@ public class SRNMessageHeader {
         // 32 Bit Sequence number
         // 32 Bit Reference Sequence number (0x0) if no ref was defined
         // 1 Bit for Reference Flag
+        // 1 Bit for Multi Flag
         // 1 Bit for Fin Flag
-        // 6 Bit reserved and unused -
+        // 5 Bit reserved and unused -
         return HEADER_SIZE;
     }
 
@@ -76,8 +81,9 @@ public class SRNMessageHeader {
     }
 
     private void setFlags(byte ref) {
-        isLastMessage = ((ref >> 7) & 1) == 1;
-        hasRefNumber = ((ref >> 6) & 1) == 1;
+        hasRefNumber = ((ref >> 7) & 1) == 1;
+        isMultiMessage= ((ref >> 6) & 1) == 1;
+        isLastMessage = ((ref >> 5) & 1) == 1;
     }
     /**
      * Builds the flag byte
@@ -85,11 +91,15 @@ public class SRNMessageHeader {
      * @return Calculated flag array
      */
     private byte[] buildFlagByte() {
-        // fin: 1000 0000
-        // ref: 0100 0000
-        int n = 0;
-        if (isLastMessage) n += 128;
-        if (hasRefNumber) n += 64;
+        // ref:     1000 000
+        // multi:   0100 0000
+        // fin:     0010 0000
+
+        int n = 0x0;
+
+        if (hasRefNumber) n += 0x80;
+        if (isMultiMessage) n += 0x40;
+        if (isLastMessage) n += 0x20;
 
         return new byte[] {(byte) n};
     }

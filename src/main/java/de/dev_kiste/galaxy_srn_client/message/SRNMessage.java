@@ -13,9 +13,9 @@ public class SRNMessage {
     private String payload;
     private byte topic;
 
-    public SRNMessage(byte[] seqNumber, byte[] refNumber, boolean hasRefNumber, boolean isLastMessage, byte topic, String payload) {
+    public SRNMessage(byte[] seqNumber, byte[] refNumber, boolean hasRefNumber, boolean isMultiMessage, boolean isLastMessage, byte topic, String payload) {
         // TODO: Check for validity
-        header = new SRNMessageHeader(seqNumber, refNumber, hasRefNumber, isLastMessage);
+        header = new SRNMessageHeader(seqNumber, refNumber, hasRefNumber, isMultiMessage, isLastMessage);
         this.topic = topic;
         this.payload = payload;
     }

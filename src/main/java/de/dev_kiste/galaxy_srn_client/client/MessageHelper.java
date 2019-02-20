@@ -83,7 +83,7 @@ public class MessageHelper {
             int index = (i+1 == messageCount) ? payloadSize : getMaxPayloadSize() * (i+1);
             byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, index);
 
-            result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), i+1 == messageCount, topic, new String(data, StandardCharsets.UTF_8));
+            result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), messageCount > 1, i+1 == messageCount, topic, new String(data, StandardCharsets.UTF_8));
         }
         return result;
     }
