@@ -117,6 +117,40 @@ public class MessageHelper {
     public int getDataOffset() {
         return SRNMessageHeader.headerSize();
     }
+
+    byte[] createEncrypedMessageCopy(byte[] source) throws Exception {
+        int offset = getDataOffset() + 1;
+        byte[] header = Arrays.copyOfRange(source, 0, offset);
+        byte[] decrypted = Arrays.copyOfRange(source, offset, source.length);
+
+        byte[] encrypted = encrypt(decrypted);
+
+        return concatenateBytes(header, encrypted);
+    }
+
+    /**
+     * Concatenates the given byte arrays and returns the new array
+     *
+     * @param arrays arrays to concatenate
+     * @return Concatenated array
+     */
+    public byte[] concatenateBytes(byte[]... arrays) {
+        // https://www.mkyong.com/java/java-how-to-join-arrays/
+        int length = 0;
+        for (byte[] array : arrays) {
+            length += array.length;
+        }
+        final byte[] result = new byte[length];
+
+        int offset = 0;
+        for (byte[] array : arrays) {
+            System.arraycopy(array, 0, result, offset, array.length);
+            offset += array.length;
+        }
+
+        return result;
+    }
+
     /**
      * Encrypts the given input using AES
      *
@@ -146,29 +180,6 @@ public class MessageHelper {
                 (byte) (input >> 8),
                 (byte) input
         };
-    }
-
-    /**
-     * Concatenates the given byte arrays and returns the new array
-     *
-     * @param arrays arrays to concatenate
-     * @return Concatenated array
-     */
-    private byte[] concatenateBytes(byte[]... arrays) {
-        // https://www.mkyong.com/java/java-how-to-join-arrays/
-        int length = 0;
-        for (byte[] array : arrays) {
-            length += array.length;
-        }
-        final byte[] result = new byte[length];
-
-        int offset = 0;
-        for (byte[] array : arrays) {
-            System.arraycopy(array, 0, result, offset, array.length);
-            offset += array.length;
-        }
-
-        return result;
     }
 
     private int getMaxPayloadSize() {

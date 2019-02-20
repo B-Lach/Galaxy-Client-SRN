@@ -1,8 +1,11 @@
 package de.dev_kiste.galaxy_srn_client.client;
 
 import de.dev_kiste.galaxy.driver.GalaxyDriver;
+import de.dev_kiste.galaxy.messaging.GalaxyMessage;
 import de.dev_kiste.galaxy.messaging.MessageHandler;
+import de.dev_kiste.galaxy.messaging.MessageLogger;
 import de.dev_kiste.galaxy.node.middleware.GalaxyMiddleware;
+import de.dev_kiste.galaxy_srn_client.message.SRNMessageHandler;
 
 import java.util.ArrayList;
 import java.util.Optional;
@@ -14,7 +17,7 @@ import java.util.Optional;
 public class SRNDeviceBuilder {
     private DeviceType type = DeviceType.FULL_FUNCTION;
     private GalaxyDriver driver = null;
-    private MessageHandler messageHandler = null;
+    private SRNMessageHandler messageHandler = null;
     private ArrayList<GalaxyMiddleware> middlewares = new ArrayList();
     private String secret = "";
 
@@ -41,7 +44,7 @@ public class SRNDeviceBuilder {
         return this;
     }
 
-    public SRNDeviceBuilder setMessageHandler(MessageHandler messageHandler) {
+    public SRNDeviceBuilder setMessageHandler(SRNMessageHandler messageHandler) {
         this.messageHandler = messageHandler;
 
         return this;
@@ -72,9 +75,7 @@ public class SRNDeviceBuilder {
         return middlewares;
     }
 
-    MessageHandler getMessageHandler() {
-        return messageHandler;
-    }
+    SRNMessageHandler getMessageHandler() { return messageHandler; }
 
     GalaxyDriver getDriver() {
         return driver;

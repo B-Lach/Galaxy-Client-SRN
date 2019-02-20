@@ -1,15 +1,16 @@
 package de.dev_kiste.galaxy_srn_client.client;
 
 import de.dev_kiste.galaxy.messaging.GalaxyMessage;
-import de.dev_kiste.galaxy.messaging.MessageHandler;
 import de.dev_kiste.galaxy.node.GalaxyNode;
 import de.dev_kiste.galaxy.node.GalaxyNodeBuilder;
 import de.dev_kiste.galaxy.node.middleware.GalaxyMiddleware;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareCaller;
 import de.dev_kiste.galaxy.node.middleware.MiddlewareStopper;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessage;
+import de.dev_kiste.galaxy_srn_client.message.SRNMessageHandler;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessageHeader;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
@@ -27,7 +28,7 @@ public class SRNDevice {
     private MessageHelper messageHelper;
 
     private final Optional<Logger> logger;
-    private Optional<MessageHandler> messageHandler;
+    private Optional<SRNMessageHandler> messageHandler;
     
     SRNDevice(SRNDeviceBuilder builder) {
         messageHandler = Optional.ofNullable(builder.getMessageHandler());
@@ -40,11 +41,21 @@ public class SRNDevice {
 
         GalaxyNodeBuilder nodeBuilder = new GalaxyNodeBuilder()
                 .setDriver(builder.getDriver())
-                // TODO: Replace with valid logic
                 .setMessageHandler(received-> {
-                    SRNMessage message = new SRNMessage(received.getPayload());
+                    try {
+                        byte[][] data = new byte[][] {messageHelper.createEncrypedMessageCopy(received.getPayload())};
+                        sendPayloadArray(data, 0, Optional.empty(), true);
+                    } catch (Exception e) {
+                        logIfNeeded(Level.WARNING, e.getMessage());
+                    }
 
-                    System.out.println(received.getSource() + " : " + message);
+
+                    messageHandler.ifPresent(handler -> {
+                        logIfNeeded(Level.INFO, "Will forward SRNMessage to registered handler");
+                        SRNMessage message = new SRNMessage(received.getPayload());
+
+                        handler.received(message);
+                    });
                 });
 
         if(builder.getIsDebug()) {
@@ -55,11 +66,8 @@ public class SRNDevice {
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             try {
                 int offset = SRNMessageHeader.headerSize() + 1;
-                int length = message.getPayload().length - offset;
 
-                byte[] encrypted = new byte[length];
-                System.arraycopy(message.getPayload(), offset, encrypted, 0, length);
-
+                byte[] encrypted = Arrays.copyOfRange(message.getPayload(), offset, message.getPayload().length);
                 byte[] decrypted = messageHelper.decrypt(encrypted);
                 byte[] newBytes = new byte[offset + decrypted.length];
 
@@ -75,7 +83,7 @@ public class SRNDevice {
                 stopper.stop();
             }
         });
-
+        // Execute Loop Detection Middleware after decryption
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             SRNMessage m = new SRNMessage(message.getPayload());
 
@@ -87,7 +95,7 @@ public class SRNDevice {
                 caller.call(message);
             }
         });
-
+        // Execute all registered middlewares
         for(GalaxyMiddleware m: builder.getMiddlewares()) {
             nodeBuilder.use(m);
         }
@@ -158,7 +166,7 @@ public class SRNDevice {
                 LoopDetector.getInstance().willSendMessage(messages[i]);
                 payloads[i] = messages[i].toBytes();
             }
-            sendPayloadArray(payloads, 0, future, true);
+            sendPayloadArray(payloads, 0, Optional.of(future), true);
 
         } catch (Exception e) {
             logIfNeeded(Level.WARNING, e.getMessage());
@@ -175,11 +183,11 @@ public class SRNDevice {
      * @param future The Future to trigger at the end.
      * @param lastSucceeded Boolean indicating if the last message was send. Should be set to true on calling this method
      */
-    private void sendPayloadArray(byte[][] payloads, int index, CompletableFuture<Boolean> future, boolean lastSucceeded) {
+    private void sendPayloadArray(byte[][] payloads, int index, Optional<CompletableFuture<Boolean>> future, boolean lastSucceeded) {
         if(!lastSucceeded) {
-            future.complete(lastSucceeded);
+            future.ifPresent(f -> f.complete(lastSucceeded));
         } else if(index >= payloads.length) {
-            future.complete(lastSucceeded);
+            future.ifPresent(f -> f.complete(lastSucceeded));
         } else {
             node.sendBroadcastPayload(payloads[index])
                     .thenAccept(didSend -> sendPayloadArray(payloads, index + 1, future, didSend));
