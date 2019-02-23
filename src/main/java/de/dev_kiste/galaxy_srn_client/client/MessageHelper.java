@@ -40,6 +40,11 @@ public class MessageHelper {
         }
     }
 
+    /**
+     * Setups the underlying crypto stack
+     *
+     * @return <code>boolean</code> indicating if the stack was bootstrapped,
+     */
     private boolean setupCrypto() {
         try {
             // https://blog.axxg.de/java-aes-verschluesselung-mit-beispiel/
@@ -60,7 +65,7 @@ public class MessageHelper {
     }
 
     /**
-     * Method to build an array of <code>SRNMessage</code> object from the given values. The payload will be encrypted automatically and
+     * Builds an array of <code>SRNMessage</code> object from the given values. The payload will be encrypted automatically and
      * multiple messages will be generated if the payload does not fit in one single message.
      *
      * @param refSeqNumber Optional containing a reference sequence number if needed
@@ -74,15 +79,26 @@ public class MessageHelper {
         int payloadSize = encrypted.length;
         int messageCount = (int) Math.ceil((double) payloadSize / getMaxPayloadSize());
 
+        byte[] initialSeqBytes = null;
+
         SRNMessage[] result = new SRNMessage[messageCount];
 
         for(int i = 0; i < messageCount; i++) {
             byte[] seqBytes = buildSequenceBytes(seqNumber.getAndUpdate());
-            byte[] refBytes = buildSequenceBytes(refSeqNumber.orElse(0L));
 
-            int index = (i+1 == messageCount) ? payloadSize : getMaxPayloadSize() * (i+1);
-            byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, index);
+            if(i == 0) {
+                initialSeqBytes = seqBytes;
+            }
+            byte[] refBytes;
 
+            if(i == 0) {
+                refBytes = buildSequenceBytes(refSeqNumber.orElse(0L));
+            } else {
+                refBytes = initialSeqBytes;
+            }
+            int endIndex = (i+1 == messageCount) ? payloadSize : getMaxPayloadSize() * (i+1);
+
+            byte[] data = Arrays.copyOfRange(encrypted, getMaxPayloadSize() * i, endIndex);
             result[i] = new SRNMessage(seqBytes, refBytes, refSeqNumber.isPresent(), messageCount > 1, i+1 == messageCount, topic, new String(data, StandardCharsets.UTF_8));
         }
         return result;
@@ -114,18 +130,32 @@ public class MessageHelper {
         return cipher.doFinal(decoded);
     }
 
+    /**
+     * Returns the beginning index of the payload
+     *
+     * @return payload begin
+     */
     public int getDataOffset() {
-        return SRNMessageHeader.headerSize();
+        return SRNMessageHeader.headerSize() + 1;
     }
 
-    byte[] createEncrypedMessageCopy(byte[] source) throws Exception {
-        int offset = getDataOffset() + 1;
+    /**
+     * Extracts the payload and creates a encrypted copy of a given byte array.
+     *
+     * @param source the data to get a copy from
+     * @param isEncrypted <code>boolean</code> indicating if the data is already encrypted
+     * @return encrypted copy of the payload
+     * @throws Exception if something went wrong creating the copy
+     */
+    byte[] createEncrypedMessageCopy(byte[] source, boolean isEncrypted) throws Exception {
+        int offset = getDataOffset();
         byte[] header = Arrays.copyOfRange(source, 0, offset);
-        byte[] decrypted = Arrays.copyOfRange(source, offset, source.length);
+        byte[] copy = Arrays.copyOfRange(source, offset, source.length);
 
-        byte[] encrypted = encrypt(decrypted);
-
-        return concatenateBytes(header, encrypted);
+        if(!isEncrypted) {
+            copy = encrypt(copy);
+        }
+        return concatenateBytes(header, copy);
     }
 
     /**
@@ -168,6 +198,7 @@ public class MessageHelper {
 
     /**
      * Casts the given sequence number into 4 byte array
+     *
      * @param input the sequence number
      * @return Casted input
      */
@@ -182,6 +213,11 @@ public class MessageHelper {
         };
     }
 
+    /**
+     * Returns the max allowed payload size in bytes
+     *
+     * @return size
+     */
     private int getMaxPayloadSize() {
         return maxPayload - getDataOffset();
     }

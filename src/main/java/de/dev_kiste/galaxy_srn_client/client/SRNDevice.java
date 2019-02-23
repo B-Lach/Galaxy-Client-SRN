@@ -9,6 +9,7 @@ import de.dev_kiste.galaxy.node.middleware.MiddlewareStopper;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessage;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessageHandler;
 import de.dev_kiste.galaxy_srn_client.message.SRNMessageHeader;
+import de.dev_kiste.galaxy_srn_client.message.SRNMultiMessageHandler;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -26,12 +27,31 @@ public class SRNDevice {
     private DeviceType deviceType;
     private GalaxyNode node;
     private MessageHelper messageHelper;
+    private SRNMultiMessageHandler multiMessageHandler;
 
     private final Optional<Logger> logger;
     private Optional<SRNMessageHandler> messageHandler;
-    
+
+    /**
+     * Default initializer to build an <code>SRNDevice</code> object from the given <code>SRNDeviceBuilder</code> instance
+     *
+     * @param builder the builder
+     */
     SRNDevice(SRNDeviceBuilder builder) {
         messageHandler = Optional.ofNullable(builder.getMessageHandler());
+        multiMessageHandler = new SRNMultiMessageHandler((multiMessage -> {
+            messageHandler.ifPresent(handler ->  {
+                try {
+                    SRNMessage message = multiMessage.buildMessage(messageHelper);
+                    logIfNeeded(Level.INFO, "Will forward SRMultiNMessage to registered handler");
+
+                    handler.received(message);
+                } catch (Exception e) {
+                    logIfNeeded(Level.WARNING,  "Failed to build SRNMessage object from SRNMultiMessage");
+                }
+            });
+        }));
+
         deviceType = builder.getDeviceType();
         logger = Optional.ofNullable(
                 builder.getIsDebug() ?
@@ -42,47 +62,64 @@ public class SRNDevice {
         GalaxyNodeBuilder nodeBuilder = new GalaxyNodeBuilder()
                 .setDriver(builder.getDriver())
                 .setMessageHandler(received-> {
+                    SRNMessage message = new SRNMessage(received.getPayload());
+
+                    if(message.getHeader().isMultiMessage()) {
+                        if(!multiMessageHandler.addNewMessage(message)) {
+                            logIfNeeded(Level.WARNING, "Failed to add SRNMultiMessage to message stack");
+                        } else {
+                            logIfNeeded(Level.INFO, "Added new SRNMultiMessage to message stack");
+                        }
+                    } else {
+                        messageHandler.ifPresent(handler -> {
+                            logIfNeeded(Level.INFO, "Will forward SRNMessage to registered handler");
+
+                            handler.received(message);
+                        });
+                    }
+
                     try {
-                        byte[][] data = new byte[][] {messageHelper.createEncrypedMessageCopy(received.getPayload())};
+                        byte[][] data = new byte[][] {messageHelper.createEncrypedMessageCopy(received.getPayload(), message.getHeader().isMultiMessage())};
                         sendPayloadArray(data, 0, Optional.empty(), true);
                     } catch (Exception e) {
                         logIfNeeded(Level.WARNING, e.getMessage());
                     }
-
-
-                    messageHandler.ifPresent(handler -> {
-                        logIfNeeded(Level.INFO, "Will forward SRNMessage to registered handler");
-                        SRNMessage message = new SRNMessage(received.getPayload());
-
-                        handler.received(message);
-                    });
                 });
 
         if(builder.getIsDebug()) {
             nodeBuilder = nodeBuilder.isDebug();
         }
 
-        // Decrypt incoming message first
+        // Decrypt incoming message first if it isn't part of a multi message
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             try {
-                int offset = SRNMessageHeader.headerSize() + 1;
+                int offset = messageHelper.getDataOffset();
+                byte[] headerBytes = Arrays.copyOfRange(message.getPayload(), 0, offset);
 
-                byte[] encrypted = Arrays.copyOfRange(message.getPayload(), offset, message.getPayload().length);
-                byte[] decrypted = messageHelper.decrypt(encrypted);
-                byte[] newBytes = new byte[offset + decrypted.length];
+                SRNMessageHeader header = new SRNMessageHeader(headerBytes);
 
-                System.arraycopy(message.getPayload(), 0, newBytes, 0, offset);
-                System.arraycopy(decrypted, 0, newBytes, offset, decrypted.length);
+                if(header.isMultiMessage()) {
+                    logIfNeeded(Level.INFO, "Incoming message is a multi message. Skipped decrypting");
 
-                GalaxyMessage newMessage = new GalaxyMessage(newBytes, message.getSource());
-                logIfNeeded(Level.INFO, "Incoming message has been decrypted");
+                    caller.call(message);
+                } else {
+                    byte[] encrypted = Arrays.copyOfRange(message.getPayload(), offset, message.getPayload().length);
+                    byte[] decrypted = messageHelper.decrypt(encrypted);
+                    byte[] newBytes = new byte[offset + decrypted.length];
 
-                caller.call(newMessage);
+                    System.arraycopy(message.getPayload(), 0, newBytes, 0, offset);
+                    System.arraycopy(decrypted, 0, newBytes, offset, decrypted.length);
+
+                    GalaxyMessage newMessage = new GalaxyMessage(newBytes, message.getSource());
+                    logIfNeeded(Level.INFO, "Incoming message has been decrypted");
+                    caller.call(newMessage);
+                }
             } catch (Exception e) {
                 logIfNeeded(Level.WARNING, e.getMessage());
                 stopper.stop();
             }
         });
+
         // Execute Loop Detection Middleware after decryption
         nodeBuilder.use((GalaxyMessage message, MiddlewareCaller caller, MiddlewareStopper stopper) -> {
             SRNMessage m = new SRNMessage(message.getPayload());
@@ -91,7 +128,6 @@ public class SRNDevice {
                 logIfNeeded(Level.INFO, "Loop detection found duplicate message. Will stop pipeline execution");
                 stopper.stop();
             } else {
-                logIfNeeded(Level.INFO, "Loop detection hasn't found a duplicate.");
                 caller.call(message);
             }
         });
@@ -119,7 +155,7 @@ public class SRNDevice {
     }
 
     /**
-     * Method to set the used hardware address
+     * Set the used hardware address
      *
      * @param address The address to us
      * @return Future containing boolean indicating if address was set
@@ -129,7 +165,7 @@ public class SRNDevice {
     }
 
     /**
-     * Method to get the current used address
+     * Get the current used address
      *
      * @return Future containing the currently used address
      */
@@ -151,7 +187,7 @@ public class SRNDevice {
     }
 
     /**
-     * Method to send the given message using FFFF (broadcast) as destination.
+     * Sends the given message using FFFF (broadcast) as destination.
      *
      * @param message Message to send
      * @return Futurue containing boolean indicating if sending the message succeeded.

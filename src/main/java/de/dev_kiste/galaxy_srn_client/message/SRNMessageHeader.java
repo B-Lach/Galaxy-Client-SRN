@@ -22,8 +22,7 @@ public class SRNMessageHeader {
         this.isMultiMessage = isMultiMessage;
     }
 
-    SRNMessageHeader(byte[] data) {
-        // TODO: Check for validity
+    public SRNMessageHeader(byte[] data) {
         seqNumber = new byte[]{data[0], data[1], data[2], data[3]};
         refNumber = new byte[]{data[4], data[5], data[6], data[7]};
 
